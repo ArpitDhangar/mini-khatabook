@@ -11,7 +11,7 @@ const app = express();
 // CORS configuration
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://mini-khatabook-1.vercel.app"
+  "https://mini-khatabook.vercel.app"
 ];
 
 app.use(cors({
