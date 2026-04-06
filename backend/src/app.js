@@ -9,9 +9,20 @@ const authMiddleware = require('./middleware/authMiddleware');
 const app = express();
 
 // CORS configuration
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://mini-khatabook.vercel.app"
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
 }));
 
 // Body parsing middleware
