@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { customerAPI, ledgerAPI } from '../services/api';
+import { generateBill } from '../utils/generateBill';
 import LedgerTable from '../components/LedgerTable';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -9,7 +10,6 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
-// Get YYYY-MM-DD for today
 const todayStr = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -19,22 +19,18 @@ export default function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [customer, setCustomer]     = useState(null);
-  const [summary, setSummary]       = useState(null);
-  const [entries, setEntries]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [entriesLoading, setEntriesLoading] = useState(false);
+  const [customer, setCustomer]               = useState(null);
+  const [summary, setSummary]                 = useState(null);
+  const [entries, setEntries]                 = useState([]);
+  const [loading, setLoading]                 = useState(true);
+  const [entriesLoading, setEntriesLoading]   = useState(false);
 
-  // Month/year filter
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const [year, setYear]   = useState(String(now.getFullYear()));
 
-  // Manual payment modal
-  const [showPayment, setShowPayment] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ amount: '', notes: '', date: todayStr() });
-
-  // Delete customer confirm
+  const [showPayment, setShowPayment]           = useState(false);
+  const [paymentForm, setPaymentForm]           = useState({ amount: '', notes: '', date: todayStr() });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const loadCustomer = useCallback(async () => {
@@ -58,7 +54,6 @@ export default function CustomerDetail() {
   const loadEntries = useCallback(async () => {
     try {
       setEntriesLoading(true);
-      // The backend auto-generates missing entries when fetching
       const res = await ledgerAPI.getEntries(id, { month, year, limit: 100 });
       setEntries(res.data || []);
     } catch (err) {
@@ -77,7 +72,6 @@ export default function CustomerDetail() {
     init();
   }, [loadCustomer, loadSummary, loadEntries]);
 
-  // Re-fetch summary + entries when month/year filter changes
   useEffect(() => {
     if (!loading) {
       loadSummary();
@@ -151,6 +145,25 @@ export default function CustomerDetail() {
     }
   };
 
+  const handleSkipEntry = async (entryId) => {
+    try {
+      const res = await ledgerAPI.skipEntry(entryId);
+      toast.success(res.data.isSkipped ? 'Entry skipped' : 'Entry unskipped');
+      loadEntries();
+      loadSummary();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleDownloadBill = () => {
+    if (!entries.length) {
+      toast.error('No entries for the selected month');
+      return;
+    }
+    generateBill({ customer, entries, month, year });
+  };
+
   if (loading) return <LoadingSpinner text="Loading customer ledger..." />;
   if (!customer) return (
     <div className="text-center py-16 text-gray-400">
@@ -160,7 +173,6 @@ export default function CustomerDetail() {
     </div>
   );
 
-  // Build month/year selector options
   const years  = Array.from({ length: 3 }, (_, i) => String(now.getFullYear() - i));
   const months = [
     { v: '01', l: 'January'   }, { v: '02', l: 'February'  }, { v: '03', l: 'March'     },
@@ -170,94 +182,129 @@ export default function CustomerDetail() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Back link */}
-      <Link to="/customers" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-        ← Back to Customers
+      <Link to="/customers" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline">
+        ← Customers
       </Link>
 
-      {/* Customer header card */}
-      <div className="card">
-        <div className="flex items-start justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{customer.name}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">📞 {customer.phone}</p>
-            <p className="text-sm text-gray-500">
-              Daily: <span className="font-semibold text-gray-700">{fmt(customer.dailyAmount)}</span>
+      {/* ── Customer header card ── */}
+      <div className="card space-y-3">
+        {/* Name + status row */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate leading-tight">
+              {customer.name}
+            </h1>
+            <p className="text-xs text-gray-500 mt-0.5">📞 {customer.phone}</p>
+            <p className="text-xs text-gray-500">
+              Daily <span className="font-semibold text-gray-700">{fmt(customer.dailyAmount)}</span>
               &nbsp;· Since {customer.startDate}
             </p>
           </div>
-          <div className="flex items-center flex-wrap gap-2">
-            {customer.isPaused
-              ? <span className="badge-yellow">⏸ Paused</span>
-              : <span className="badge-green">▶ Active</span>
-            }
-            <button
-              onClick={handleTogglePause}
-              className={customer.isPaused ? 'btn-success text-xs' : 'btn-warning text-xs'}
-            >
-              {customer.isPaused ? 'Resume' : 'Pause'}
-            </button>
-            <Link to={`/customers/${id}/edit`} className="btn-secondary text-xs">Edit</Link>
-            <button onClick={() => setShowPayment(true)} className="btn-primary text-xs">
-              + Payment
-            </button>
-            <button onClick={() => setShowDeleteConfirm(true)} className="btn-danger text-xs">
-              Deactivate
-            </button>
-          </div>
+          <span className={`shrink-0 mt-0.5 ${customer.isPaused ? 'badge-yellow' : 'badge-green'}`}>
+            {customer.isPaused ? '⏸ Paused' : '▶ Active'}
+          </span>
+        </div>
+
+        {/* Action buttons — 2-col grid on mobile, single row on desktop */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+          <button
+            onClick={() => setShowPayment(true)}
+            className="btn-primary text-xs py-2"
+          >
+            + Payment
+          </button>
+          <button
+            onClick={handleTogglePause}
+            className={`text-xs py-2 ${customer.isPaused ? 'btn-success' : 'btn-warning'}`}
+          >
+            {customer.isPaused ? 'Resume' : 'Pause'}
+          </button>
+          <Link to={`/customers/${id}/edit`} className="btn-secondary text-xs py-2 text-center">
+            Edit Info
+          </Link>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="btn-danger text-xs py-2"
+          >
+            Deactivate
+          </button>
         </div>
       </div>
 
-      {/* Financial summary strip */}
+      {/* ── Financial summary ── */}
       {summary && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="card text-center">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Debit</p>
-            <p className="text-xl font-bold text-red-600 mt-1">{fmt(summary.totalDebit)}</p>
+        <div className="grid grid-cols-3 gap-2">
+          {/* Debit */}
+          <div className="card p-3 text-center border-l-4 border-l-red-400">
+            <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide">Debit</p>
+            <p className="text-sm sm:text-lg font-bold text-red-600 mt-0.5 truncate">{fmt(summary.totalDebit)}</p>
           </div>
-          <div className="card text-center">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Paid</p>
-            <p className="text-xl font-bold text-emerald-600 mt-1">{fmt(summary.totalCredit)}</p>
+          {/* Paid */}
+          <div className="card p-3 text-center border-l-4 border-l-emerald-400">
+            <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide">Paid</p>
+            <p className="text-sm sm:text-lg font-bold text-emerald-600 mt-0.5 truncate">{fmt(summary.totalCredit)}</p>
           </div>
-          <div className="card text-center">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Balance Due</p>
-            <p className={`text-xl font-bold mt-1 ${summary.balance > 0 ? 'text-orange-600' : 'text-blue-600'}`}>
+          {/* Balance */}
+          <div className={`card p-3 text-center border-l-4 ${summary.balance > 0 ? 'border-l-orange-400' : 'border-l-blue-400'}`}>
+            <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide">Balance</p>
+            <p className={`text-sm sm:text-lg font-bold mt-0.5 truncate ${summary.balance > 0 ? 'text-orange-600' : 'text-blue-600'}`}>
               {fmt(summary.balance)}
             </p>
           </div>
         </div>
       )}
 
-      {/* Month/Year selector + Monthly breakdown */}
+      {/* ── Ledger ── */}
       <div className="card">
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <h2 className="font-semibold text-gray-800 mr-2">Ledger</h2>
-          <select className="input w-auto text-sm" value={month} onChange={(e) => setMonth(e.target.value)}>
+        {/* Controls row */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <h2 className="font-semibold text-gray-800 mr-1">Ledger</h2>
+          <select
+            className="input py-1.5 text-sm w-auto flex-1 min-w-[100px]"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+          >
             {months.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}
           </select>
-          <select className="input w-auto text-sm" value={year} onChange={(e) => setYear(e.target.value)}>
+          <select
+            className="input py-1.5 text-sm w-auto"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+          >
             {years.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
+          <button
+            onClick={handleDownloadBill}
+            disabled={entriesLoading}
+            className="btn-secondary text-xs py-1.5 px-3 whitespace-nowrap"
+          >
+            ↓ Bill
+          </button>
         </div>
 
         <LedgerTable
           entries={entries}
           onSave={handleSaveEntry}
           onDelete={handleDeleteEntry}
+          onSkip={handleSkipEntry}
           loading={entriesLoading}
         />
       </div>
 
-      {/* Monthly breakdown accordion */}
+      {/* ── Monthly breakdown ── */}
       {summary?.monthlyBreakdown?.length > 0 && (
         <div className="card">
           <h2 className="font-semibold text-gray-800 mb-3">Monthly Summary</h2>
-          <div className="space-y-2">
+          <div className="space-y-0.5">
             {summary.monthlyBreakdown.map((row) => (
-              <div key={row.month} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 text-sm">
-                <span className="text-gray-700 font-medium">{row.month}</span>
-                <div className="flex gap-4">
+              <div
+                key={row.month}
+                className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 text-sm"
+              >
+                <span className="text-gray-700 font-medium text-xs sm:text-sm">{row.month}</span>
+                <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm">
                   <span className="text-red-500">{fmt(row.debit)}</span>
                   <span className="text-emerald-500">{fmt(row.credit)}</span>
                   <span className={`font-bold ${row.balance > 0 ? 'text-orange-600' : 'text-blue-600'}`}>
@@ -270,7 +317,7 @@ export default function CustomerDetail() {
         </div>
       )}
 
-      {/* Add Payment Modal */}
+      {/* ── Add Payment Modal ── */}
       <Modal isOpen={showPayment} onClose={() => setShowPayment(false)} title="Record Payment">
         <form onSubmit={handleAddPayment} className="space-y-3">
           <div>
@@ -312,7 +359,7 @@ export default function CustomerDetail() {
         </form>
       </Modal>
 
-      {/* Deactivate confirmation */}
+      {/* ── Deactivate confirm ── */}
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}

@@ -45,11 +45,11 @@ export default function CustomerCard({ customer, onTogglePause, onDelete }) {
       </div>
 
       {/* Daily amount + actions */}
-      <div className="flex items-center justify-between gap-2 mt-1 pt-3 border-t border-gray-50">
+      <div className="flex items-center justify-between gap-2 mt-1 pt-3 border-t border-gray-50 flex-wrap">
         <span className="text-xs text-gray-500">
           Daily: <span className="font-semibold text-gray-700">{fmt(dailyAmount)}</span>
         </span>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap justify-end">
           <button
             onClick={() => onTogglePause(_id, isPaused)}
             className={isPaused ? 'btn-success text-xs px-2 py-1' : 'btn-warning text-xs px-2 py-1'}

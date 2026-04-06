@@ -116,6 +116,21 @@ const deleteEntry = async (req, res, next) => {
   }
 };
 
+// ─── PATCH /api/ledger/:id/skip (toggle skip for a day) ─────────────────────
+const skipEntry = async (req, res, next) => {
+  try {
+    const entry = await LedgerEntry.findById(req.params.id);
+    if (!entry || entry.isDeleted) {
+      return res.status(404).json({ success: false, message: 'Entry not found' });
+    }
+    entry.isSkipped = !entry.isSkipped;
+    await entry.save();
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── POST /api/ledger/generate (fallback: generate missing entries for all) ───
 const generateMissing = async (req, res, next) => {
   try {
@@ -135,5 +150,6 @@ module.exports = {
   createEntry,
   updateEntry,
   deleteEntry,
+  skipEntry,
   generateMissing,
 };

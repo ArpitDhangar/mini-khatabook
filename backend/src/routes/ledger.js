@@ -5,6 +5,7 @@ const {
   createEntry,
   updateEntry,
   deleteEntry,
+  skipEntry,
   generateMissing,
 } = require('../controllers/ledgerController');
 
@@ -17,8 +18,9 @@ router.get('/:customerId', getEntries);
 // Create manual entry
 router.post('/', createEntry);
 
-// Edit / soft-delete an entry
-router.put('/:id',    updateEntry);
-router.delete('/:id', deleteEntry);
+// Edit / soft-delete / skip an entry
+router.put('/:id',       updateEntry);
+router.delete('/:id',    deleteEntry);
+router.patch('/:id/skip', skipEntry);
 
 module.exports = router;

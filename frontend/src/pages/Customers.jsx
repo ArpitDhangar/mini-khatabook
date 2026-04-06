@@ -52,12 +52,12 @@ export default function Customers() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-gray-900">
           Customers <span className="text-gray-400 font-normal text-base ml-1">({customers.length})</span>
         </h1>
-        <Link to="/customers/new" className="btn-primary text-sm">
-          + Add Customer
+        <Link to="/customers/new" className="btn-primary text-xs sm:text-sm shrink-0">
+          + Add
         </Link>
       </div>
 

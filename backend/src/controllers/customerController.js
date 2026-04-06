@@ -22,8 +22,8 @@ const getAllCustomers = async (req, res, next) => {
           customerId: customer._id,
           isDeleted: false,
         });
-        const totalDebit  = entries.filter((e) => e.type === 'debit').reduce((s, e) => s + e.amount, 0);
-        const totalCredit = entries.filter((e) => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
+        const totalDebit  = entries.filter((e) => e.type === 'debit'  && !e.isSkipped).reduce((s, e) => s + e.amount, 0);
+        const totalCredit = entries.filter((e) => e.type === 'credit' && !e.isSkipped).reduce((s, e) => s + e.amount, 0);
         return {
           ...customer.toObject(),
           totalDebit,
@@ -161,13 +161,14 @@ const getCustomerSummary = async (req, res, next) => {
 
     const entries = await LedgerEntry.find(dateFilter).sort({ date: 1 });
 
-    const totalDebit  = entries.filter((e) => e.type === 'debit').reduce((s, e) => s + e.amount, 0);
-    const totalCredit = entries.filter((e) => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
+    const totalDebit  = entries.filter((e) => e.type === 'debit'  && !e.isSkipped).reduce((s, e) => s + e.amount, 0);
+    const totalCredit = entries.filter((e) => e.type === 'credit' && !e.isSkipped).reduce((s, e) => s + e.amount, 0);
     const balance     = totalDebit - totalCredit;
 
     // Group by month for the monthly summary view
     const monthlyBreakdown = {};
     for (const entry of entries) {
+      if (entry.isSkipped) continue; // skipped entries don't affect balance
       const key = entry.date.substring(0, 7); // "YYYY-MM"
       if (!monthlyBreakdown[key]) {
         monthlyBreakdown[key] = { month: key, debit: 0, credit: 0, balance: 0 };
@@ -201,12 +202,12 @@ const getDashboardStats = async (req, res, next) => {
     const pausedCustomers = await Customer.countDocuments({ isActive: true, isPaused: true });
 
     const allEntries = await LedgerEntry.find({ isDeleted: false });
-    const totalDebit  = allEntries.filter((e) => e.type === 'debit').reduce((s, e) => s + e.amount, 0);
-    const totalCredit = allEntries.filter((e) => e.type === 'credit').reduce((s, e) => s + e.amount, 0);
+    const totalDebit  = allEntries.filter((e) => e.type === 'debit'  && !e.isSkipped).reduce((s, e) => s + e.amount, 0);
+    const totalCredit = allEntries.filter((e) => e.type === 'credit' && !e.isSkipped).reduce((s, e) => s + e.amount, 0);
 
-    // Today's entries
+    // Today's entries (excluding skipped)
     const today = getTodayString();
-    const todayEntries = allEntries.filter((e) => e.date === today);
+    const todayEntries = allEntries.filter((e) => e.date === today && !e.isSkipped);
     const todayAmount = todayEntries.reduce((s, e) => {
       return e.type === 'debit' ? s + e.amount : s - e.amount;
     }, 0);

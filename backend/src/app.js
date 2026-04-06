@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
+const authRoutes = require('./routes/auth');
 const customerRoutes = require('./routes/customers');
 const ledgerRoutes = require('./routes/ledger');
 const errorHandler = require('./middleware/errorHandler');
+const authMiddleware = require('./middleware/authMiddleware');
 
 const app = express();
 
@@ -16,14 +18,17 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check
+// Health check (public)
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// API Routes
-app.use('/api/customers', customerRoutes);
-app.use('/api/ledger', ledgerRoutes);
+// Auth routes (public — login / register / me)
+app.use('/api/auth', authRoutes);
+
+// Protected API routes — require valid JWT
+app.use('/api/customers', authMiddleware, customerRoutes);
+app.use('/api/ledger',    authMiddleware, ledgerRoutes);
 
 // 404 handler
 app.use((req, res) => {

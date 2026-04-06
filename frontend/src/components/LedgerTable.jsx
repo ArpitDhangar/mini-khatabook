@@ -4,61 +4,82 @@ import ConfirmDialog from './ConfirmDialog';
 
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
-/** Single editable row in the ledger */
-function EntryRow({ entry, onSave, onDelete }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({
+function EntryRow({ entry, onSave, onDelete, onSkip }) {
+  const [editing, setEditing]       = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [form, setForm]             = useState({
     amount: entry.amount,
     type: entry.type,
     notes: entry.notes || '',
   });
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleSave = () => {
     onSave(entry._id, form);
     setEditing(false);
   };
 
+  const skipped = entry.isSkipped;
+
   return (
     <>
-      <tr className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-        {/* Date */}
-        <td className="py-3 px-4 text-sm text-gray-700 whitespace-nowrap">{entry.date}</td>
+      <tr className={`border-b border-gray-50 transition-colors text-sm ${skipped ? 'bg-gray-50 opacity-60' : 'hover:bg-gray-50'}`}>
 
-        {/* Type badge */}
-        <td className="py-3 px-4">
-          <span className={entry.type === 'debit' ? 'badge-red' : 'badge-green'}>
-            {entry.type === 'debit' ? 'Debit' : 'Credit'}
-          </span>
-          {entry.isAuto && (
-            <span className="badge-gray ml-1">Auto</span>
-          )}
+        {/* Date */}
+        <td className="py-2 px-2 sm:px-3 text-gray-600 whitespace-nowrap text-xs sm:text-sm">
+          {entry.date}
+        </td>
+
+        {/* Type */}
+        <td className="py-2 px-2 sm:px-3">
+          <div className="flex flex-wrap gap-1 items-center">
+            <span className={skipped ? 'badge-gray' : entry.type === 'debit' ? 'badge-red' : 'badge-green'}>
+              {entry.type === 'debit' ? 'Dr' : 'Cr'}
+            </span>
+            {skipped && (
+              <span className="badge bg-yellow-100 text-yellow-700 text-[10px]">Skip</span>
+            )}
+            {entry.isAuto && !skipped && (
+              <span className="badge-gray text-[10px] hidden sm:inline-flex">Auto</span>
+            )}
+          </div>
         </td>
 
         {/* Amount */}
-        <td className={`py-3 px-4 text-sm font-semibold ${entry.type === 'debit' ? 'text-red-600' : 'text-emerald-600'}`}>
+        <td className={`py-2 px-2 sm:px-3 font-semibold whitespace-nowrap text-xs sm:text-sm ${
+          skipped ? 'text-gray-400 line-through' : entry.type === 'debit' ? 'text-red-600' : 'text-emerald-600'
+        }`}>
           {entry.type === 'debit' ? '-' : '+'}{fmt(entry.amount)}
         </td>
 
-        {/* Notes */}
-        <td className="py-3 px-4 text-sm text-gray-500 max-w-[160px] truncate">
+        {/* Notes — desktop only */}
+        <td className="py-2 px-3 text-xs text-gray-400 max-w-[120px] truncate hidden sm:table-cell">
           {entry.notes || '—'}
         </td>
 
         {/* Actions */}
-        <td className="py-3 px-4 text-right whitespace-nowrap">
-          <button
-            onClick={() => setEditing(true)}
-            className="text-xs text-blue-500 hover:text-blue-700 mr-3 font-medium"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="text-xs text-red-400 hover:text-red-600 font-medium"
-          >
-            Delete
-          </button>
+        <td className="py-2 px-2 sm:px-3 text-right whitespace-nowrap">
+          <div className="flex items-center justify-end gap-2">
+            {!skipped && (
+              <button
+                onClick={() => setEditing(true)}
+                className="text-xs text-blue-500 hover:text-blue-700 font-medium"
+              >
+                Edit
+              </button>
+            )}
+            <button
+              onClick={() => onSkip(entry._id)}
+              className={`text-xs font-medium ${skipped ? 'text-yellow-600 hover:text-yellow-800' : 'text-gray-400 hover:text-yellow-600'}`}
+            >
+              {skipped ? 'Unskip' : 'Skip'}
+            </button>
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="text-xs text-red-400 hover:text-red-600 font-medium"
+            >
+              Del
+            </button>
+          </div>
         </td>
       </tr>
 
@@ -98,12 +119,11 @@ function EntryRow({ entry, onSave, onDelete }) {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button className="btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
-            <button className="btn-primary" onClick={handleSave}>Save Changes</button>
+            <button className="btn-primary" onClick={handleSave}>Save</button>
           </div>
         </div>
       </Modal>
 
-      {/* Delete confirmation */}
       <ConfirmDialog
         isOpen={showConfirm}
         onClose={() => setShowConfirm(false)}
@@ -117,8 +137,7 @@ function EntryRow({ entry, onSave, onDelete }) {
   );
 }
 
-/** Full ledger table with filtering */
-export default function LedgerTable({ entries, onSave, onDelete, loading }) {
+export default function LedgerTable({ entries, onSave, onDelete, onSkip, loading }) {
   const [typeFilter, setTypeFilter] = useState('all');
 
   const filtered = entries.filter(
@@ -126,9 +145,7 @@ export default function LedgerTable({ entries, onSave, onDelete, loading }) {
   );
 
   if (loading) {
-    return (
-      <div className="text-center py-10 text-gray-400 text-sm">Loading entries...</div>
-    );
+    return <div className="text-center py-10 text-gray-400 text-sm">Loading entries...</div>;
   }
 
   if (filtered.length === 0) {
@@ -142,8 +159,8 @@ export default function LedgerTable({ entries, onSave, onDelete, loading }) {
 
   return (
     <div>
-      {/* Filter bar */}
-      <div className="flex gap-2 mb-3">
+      {/* Filter pills */}
+      <div className="flex gap-1.5 mb-3">
         {['all', 'debit', 'credit'].map((f) => (
           <button
             key={f}
@@ -151,23 +168,24 @@ export default function LedgerTable({ entries, onSave, onDelete, loading }) {
             className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
               typeFilter === f
                 ? 'bg-blue-600 text-white border-blue-600'
-                : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                : 'border-gray-200 text-gray-500 hover:border-gray-400 bg-white'
             }`}
           >
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
+        <span className="ml-auto text-xs text-gray-400 self-center">{filtered.length} entries</span>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-100">
-        <table className="w-full min-w-[500px]">
-          <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <table className="w-full min-w-[320px]">
+          <thead className="bg-gray-50 text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">
             <tr>
-              <th className="py-3 px-4 text-left">Date</th>
-              <th className="py-3 px-4 text-left">Type</th>
-              <th className="py-3 px-4 text-left">Amount</th>
-              <th className="py-3 px-4 text-left">Notes</th>
-              <th className="py-3 px-4 text-right">Actions</th>
+              <th className="py-2 px-2 sm:px-3 text-left">Date</th>
+              <th className="py-2 px-2 sm:px-3 text-left">Type</th>
+              <th className="py-2 px-2 sm:px-3 text-left">Amount</th>
+              <th className="py-2 px-3 text-left hidden sm:table-cell">Notes</th>
+              <th className="py-2 px-2 sm:px-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-50">
@@ -177,6 +195,7 @@ export default function LedgerTable({ entries, onSave, onDelete, loading }) {
                 entry={entry}
                 onSave={onSave}
                 onDelete={onDelete}
+                onSkip={onSkip}
               />
             ))}
           </tbody>

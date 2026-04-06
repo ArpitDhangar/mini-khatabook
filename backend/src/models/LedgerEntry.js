@@ -32,6 +32,10 @@ const ledgerEntrySchema = new mongoose.Schema(
       type: Boolean,
       default: false, // Soft delete — never permanently remove records
     },
+    isSkipped: {
+      type: Boolean,
+      default: false, // true = customer did not take product on this day (entry preserved but excluded from balance)
+    },
     notes: {
       type: String,
       default: '',
